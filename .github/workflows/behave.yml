@@ -1,0 +1,56 @@
+
+name: GCT Playwright Behave Tests
+
+# Run the workflow whenever code is pushed or a pull request is created.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run Playwright Behave Tests
+    runs-on: ubuntu-latest
+
+    env:
+      CI: "true"
+
+    steps:
+      # Step 1: Download the project source code.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Python.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      # Step 3: Install Python dependencies.
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Step 4: Install Playwright Chromium and its system dependencies.
+      - name: Install Playwright browser
+        run: |
+          python -m playwright install --with-deps chromium
+
+      # Step 5: Run Behave tests, excluding the intentional failure demo.
+      - name: Run Behave tests
+        run: |
+          behave features/gct_tests.feature --tags="not @intentional_failure" --no-capture
+
+      # Step 6: Upload screenshots, videos and Allure results.
+      # always() ensures artifacts are uploaded even if tests fail.
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: GCT-Test-Reports
+          path: |
+            screenshots/
+            videos/
+            allure-results/
+          if-no-files-found: ignore
