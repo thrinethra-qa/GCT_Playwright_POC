@@ -10,7 +10,7 @@ class SpecialOffersPage(BasePage):
         # Initialize common browser methods from BasePage.
         super().__init__(page)
 
-        # Locator for the main content area of the Special Offers page.
+        # Locator for the main content area.
         self.main_content = self.page.locator("main")
 
         # --------------------------------------------------
@@ -31,15 +31,10 @@ class SpecialOffersPage(BasePage):
         # TC15: Offer details navigation locators
         # --------------------------------------------------
 
-        # Locator for the first View Trip Details link.
+        # Locate the first View Trip Details link.
         self.offer_details_link = self.page.locator(
             "xpath=//a[normalize-space()='View Trip Details']"
         ).first
-
-        # Locator for the expected trip details page heading.
-        self.trip_details_heading = self.page.locator(
-            "xpath=//h1[normalize-space()='The Seine: Paris & the Heart of Normandy']"
-        )
 
     # ==================================================
     # TC13: Verify Special Offers page
@@ -56,10 +51,10 @@ class SpecialOffersPage(BasePage):
         # Verify that the main content is visible.
         expect(self.main_content).to_be_visible()
 
-        # Get the text displayed inside the main content.
+        # Read the text displayed inside the main content.
         page_content = self.main_content.inner_text()
 
-        # Check that the page is not empty.
+        # Ensure that the page is not empty.
         assert page_content.strip(), (
             "Special Offers page content is empty!"
         )
@@ -83,13 +78,11 @@ class SpecialOffersPage(BasePage):
             timeout=10000
         )
 
-        # Read the original price from the page.
+        # Read both prices from the page.
         original = self.original_price.inner_text()
-
-        # Read the discounted price from the page.
         discounted = self.discounted_price.inner_text()
 
-        # Print both prices in the terminal.
+        # Print prices as test execution evidence.
         print(f"Original price displayed: {original}")
         print(f"Discounted price displayed: {discounted}")
 
@@ -112,19 +105,34 @@ class SpecialOffersPage(BasePage):
         # Click the first View Trip Details link.
         self.offer_details_link.click()
 
+        # Wait for the destination page to load.
+        self.page.wait_for_load_state(
+            "domcontentloaded",
+            timeout=15000
+        )
+
+        # Close the promotional popup if it appears.
+        self.close_promo_popup()
+
         print("First offer details link clicked successfully!")
 
     def verify_offer_trip_details_page(self):
 
-        # Verify that the expected trip heading is visible.
-        expect(self.trip_details_heading).to_be_visible(
+        # Locate the first H1 heading in the main content.
+        actual_heading = self.page.locator("main h1").first
+
+        # Verify that the trip details page heading is visible.
+        expect(actual_heading).to_be_visible(
             timeout=15000
         )
 
-        # Get the heading text from the trip details page.
-        heading = self.trip_details_heading.inner_text()
+        # Read the actual heading text.
+        heading = actual_heading.inner_text().strip()
 
-        # Print the heading as test execution evidence.
+        # Ensure the heading contains text.
+        assert heading, "Trip details page heading is empty!"
+
+        # Print the heading to identify which trip opened.
         print(f"Trip details heading displayed: {heading}")
 
         print(

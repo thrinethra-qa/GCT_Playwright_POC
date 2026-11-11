@@ -20,6 +20,13 @@ class SearchPage(BasePage):
             "//input[@id='_R_5cn5b_']"
         ).is_enabled()
 
+    def get_visible_europe_suggestion(self):
+        # Find only a visible Europe autocomplete link.
+        # The :visible selector avoids matching hidden duplicate links.
+        return self.page.locator(
+            'a[href="/tripsavailable?b=GN&r=Europe"]:visible'
+        ).first
+
     def search_valid_destination(self, destination):
 
         # Accept the cookie popup if it appears.
@@ -33,27 +40,20 @@ class SearchPage(BasePage):
         # Enter the valid destination.
         search_field.fill(destination)
 
-        # Wait for autocomplete suggestions to appear.
-        self.page.wait_for_timeout(2000)
-
         # Close the promotional popup if it appears.
-        # This prevents the popup from blocking the suggestion click.
+        # This prevents the popup from blocking autocomplete interaction.
         self.close_promo_popup()
 
-        # Locate the Europe region suggestion.
-        suggestion = self.page.locator(
-            "div.scroll-container"
-        ).locator(
-            'a[href="/tripsavailable?b=GN&r=Europe"]'
-        ).first
+        # Locate the visible Europe suggestion.
+        suggestion = self.get_visible_europe_suggestion()
 
-        # Wait until the Europe suggestion is visible.
+        # Wait until the visible suggestion appears.
         suggestion.wait_for(
             state="visible",
             timeout=15000
         )
 
-        # Click the matching suggestion.
+        # Click the visible Europe suggestion.
         suggestion.click()
 
         # Wait until the Europe results page opens.
@@ -62,6 +62,7 @@ class SearchPage(BasePage):
             timeout=15000
         )
 
+        # Print the resulting URL for debugging.
         print("Valid destination URL:", self.page.url)
 
     def search_invalid_destination(self, destination):
@@ -76,9 +77,6 @@ class SearchPage(BasePage):
 
         # Enter the invalid destination.
         search_field.fill(destination)
-
-        # Wait for the autocomplete suggestions to update.
-        self.page.wait_for_timeout(1500)
 
         # Close the promotional popup if it appears.
         self.close_promo_popup()
@@ -124,19 +122,12 @@ class SearchPage(BasePage):
         # Enter the partial destination.
         search_field.fill(destination)
 
-        # Wait for the autocomplete suggestions to appear.
-        self.page.wait_for_timeout(1500)
-
     def is_europe_suggestion_displayed(self):
 
-        # Locate Europe under the Region suggestions.
-        europe_suggestion = self.page.locator(
-            "div.scroll-container"
-        ).locator(
-            'a[href="/tripsavailable?b=GN&r=Europe"]'
-        ).first
+        # Locate only the visible Europe suggestion.
+        europe_suggestion = self.get_visible_europe_suggestion()
 
-        # Wait until the Europe suggestion becomes visible.
+        # Wait until the suggestion becomes visible.
         europe_suggestion.wait_for(
             state="visible",
             timeout=10000

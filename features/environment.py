@@ -1,4 +1,3 @@
-
 import os
 from pathlib import Path
 import allure
@@ -24,12 +23,14 @@ def before_all(context):
 
 def before_scenario(context, scenario):
 
-    # Create folders to store screenshots and videos.
+    # Create folders to store screenshots, videos and traces.
     screenshot_dir = Path("screenshots")
     video_dir = Path("videos")
+    trace_dir = Path("traces")
 
     screenshot_dir.mkdir(parents=True, exist_ok=True)
     video_dir.mkdir(parents=True, exist_ok=True)
+    trace_dir.mkdir(parents=True, exist_ok=True)
 
     # Create a safe filename using the scenario name.
     safe_name = scenario.name.replace(" ", "_")
@@ -48,17 +49,29 @@ def before_scenario(context, scenario):
         }
     )
 
+    # Start Playwright tracing before the scenario begins.
+    # Screenshots, DOM snapshots and source files are captured.
+    context.browser_context.tracing.start(
+        screenshots=True,
+        snapshots=True,
+        sources=True
+    )
+
     # Open a new browser page.
     context.page = context.browser_context.new_page()
 
-    # Store the scenario name and screenshot path.
+    # Store the scenario name and output file paths.
     context.scenario_name = safe_name
     context.screenshot_path = screenshot_dir / f"{safe_name}.png"
+    context.trace_path = trace_dir / f"{safe_name}_trace.zip"
 
     print(f"\nStarting scenario: {scenario.name}")
 
 
 def after_scenario(context, scenario):
+
+    # Check whether the scenario failed or encountered an error.
+    is_failed = scenario.status.name.lower() in ("failed", "error")
 
     # Capture a screenshot before closing the browser context.
     context.page.screenshot(
@@ -74,11 +87,31 @@ def after_scenario(context, scenario):
     )
 
     # Print the screenshot path when a scenario fails.
-    if scenario.status == "failed" or scenario.status == "error":
+    if is_failed:
         print(f"Failure screenshot saved: {context.screenshot_path}")
 
     # Save the video object before closing the browser context.
     video = context.page.video
+
+    # If the scenario failed, save the complete Playwright trace.
+    if is_failed:
+        context.browser_context.tracing.stop(
+            path=str(context.trace_path)
+        )
+
+        # Attach the trace ZIP file to the Allure report.
+        allure.attach.file(
+            str(context.trace_path),
+            name=f"{scenario.name} - Playwright Trace",
+            attachment_type="application/zip",
+            extension="zip"
+        )
+
+        print(f"Failure trace saved: {context.trace_path}")
+
+    else:
+        # Stop tracing without saving a ZIP for successful scenarios.
+        context.browser_context.tracing.stop()
 
     # Close the context to finalize the video recording.
     context.browser_context.close()

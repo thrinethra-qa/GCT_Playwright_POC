@@ -31,3 +31,6 @@ allure-report/
 Thumbs.db
 # Generated HTML test reports
 reports/
+
+#Generated traces
+traces/
