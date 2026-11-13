@@ -281,8 +281,16 @@ def verify_offer_trip_details_page(context):
 @given("the GCT homepage is opened for River Europe")
 def open_homepage_for_river_europe(context):
     context.home = HomePage(context.page)
+
+    # Open the GCT homepage.
     context.home.open_homepage()
+
+    # Accept cookies if the cookie popup appears.
     context.home.accept_cookies()
+
+    # Close the Black Friday promotional popup.
+    context.home.close_promo_popup()
+
     print("GCT homepage opened for River Europe!")
 
 

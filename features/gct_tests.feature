@@ -49,12 +49,14 @@ Feature: GCT Website Testing
     Given the GCT homepage is opened
     Then an intentional test failure should be reported
   
+  
   @regression
   Scenario: TC11 - Verify login with invalid username/email
     Given the GCT login page is opened
     When I enter invalid login credentials
     And I click the login submit button
     Then an appropriate login error message should be displayed
+
 
   @regression
   Scenario: TC12 - Verify registration lookup with an empty email field

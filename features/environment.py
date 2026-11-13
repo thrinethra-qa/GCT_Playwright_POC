@@ -1,4 +1,6 @@
+
 import os
+import re
 from pathlib import Path
 import allure
 
@@ -9,21 +11,22 @@ def before_all(context):
     # Start Playwright before executing the feature files.
     context.playwright = sync_playwright().start()
 
-    # GitHub Actions automatically sets CI=true.
-    # Locally, the browser remains visible.
-    # In CI/CD, the browser runs in headless mode.
+    # Keep the browser visible locally and headless in CI/CD.
     is_ci = os.getenv("CI", "false").lower() == "true"
 
     context.browser = context.playwright.chromium.launch(
         headless=is_ci
     )
 
-    print(f"\nPlaywright browser launched successfully! Headless mode: {is_ci}")
+    print(
+        f"\nPlaywright browser launched successfully! "
+        f"Headless mode: {is_ci}"
+    )
 
 
 def before_scenario(context, scenario):
 
-    # Create folders to store screenshots, videos and traces.
+    # Create folders for screenshots, videos and traces.
     screenshot_dir = Path("screenshots")
     video_dir = Path("videos")
     trace_dir = Path("traces")
@@ -32,15 +35,18 @@ def before_scenario(context, scenario):
     video_dir.mkdir(parents=True, exist_ok=True)
     trace_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create a safe filename using the scenario name.
-    safe_name = scenario.name.replace(" ", "_")
+    # Remove characters that Windows does not allow in filenames.
+    safe_name = re.sub(
+        r'[<>:"/\\|?*\x00-\x1f]',
+        "_",
+        scenario.name
+    ).strip(" .")
 
     # Create a separate video folder for each scenario.
     scenario_video_dir = video_dir / safe_name
     scenario_video_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create a new browser context for the scenario.
-    # Video recording is enabled for every scenario.
+    # Create a new browser context with video recording enabled.
     context.browser_context = context.browser.new_context(
         record_video_dir=str(scenario_video_dir),
         record_video_size={
@@ -49,8 +55,7 @@ def before_scenario(context, scenario):
         }
     )
 
-    # Start Playwright tracing before the scenario begins.
-    # Screenshots, DOM snapshots and source files are captured.
+    # Start tracing to capture browser actions and DOM snapshots.
     context.browser_context.tracing.start(
         screenshots=True,
         snapshots=True,
@@ -60,74 +65,118 @@ def before_scenario(context, scenario):
     # Open a new browser page.
     context.page = context.browser_context.new_page()
 
-    # Store the scenario name and output file paths.
+    # Store output paths for the current scenario.
     context.scenario_name = safe_name
-    context.screenshot_path = screenshot_dir / f"{safe_name}.png"
-    context.trace_path = trace_dir / f"{safe_name}_trace.zip"
+    context.screenshot_path = (
+        screenshot_dir / f"{safe_name}.png"
+    )
+    context.trace_path = (
+        trace_dir / f"{safe_name}_trace.zip"
+    )
 
     print(f"\nStarting scenario: {scenario.name}")
 
 
 def after_scenario(context, scenario):
 
-    # Check whether the scenario failed or encountered an error.
-    is_failed = scenario.status.name.lower() in ("failed", "error")
-
-    # Capture a screenshot before closing the browser context.
-    context.page.screenshot(
-        path=str(context.screenshot_path),
-        full_page=True
+    # Identify failed or errored scenarios.
+    is_failed = scenario.status.name.lower() in (
+        "failed",
+        "error"
     )
 
-    # Attach the screenshot to the Allure report.
-    allure.attach.file(
-        str(context.screenshot_path),
-        name=f"{scenario.name} - Screenshot",
-        attachment_type=allure.attachment_type.PNG
-    )
+    video = None
+    trace_stopped = False
 
-    # Print the screenshot path when a scenario fails.
-    if is_failed:
-        print(f"Failure screenshot saved: {context.screenshot_path}")
+    try:
+        # Save the video object before closing the page.
+        video = context.page.video
 
-    # Save the video object before closing the browser context.
-    video = context.page.video
+        if is_failed:
 
-    # If the scenario failed, save the complete Playwright trace.
-    if is_failed:
-        context.browser_context.tracing.stop(
-            path=str(context.trace_path)
-        )
+            # Capture a screenshot only when the test fails.
+            try:
+                context.page.screenshot(
+                    path=str(context.screenshot_path),
+                    full_page=True
+                )
 
-        # Attach the trace ZIP file to the Allure report.
-        allure.attach.file(
-            str(context.trace_path),
-            name=f"{scenario.name} - Playwright Trace",
-            attachment_type="application/zip",
-            extension="zip"
-        )
+                print(
+                    f"Failure screenshot saved: "
+                    f"{context.screenshot_path}"
+                )
 
-        print(f"Failure trace saved: {context.trace_path}")
+                # Attach the screenshot to the Allure report.
+                allure.attach.file(
+                    str(context.screenshot_path),
+                    name=f"{scenario.name} - Screenshot",
+                    attachment_type=allure.attachment_type.PNG
+                )
 
-    else:
-        # Stop tracing without saving a ZIP for successful scenarios.
-        context.browser_context.tracing.stop()
+            except Exception as error:
+                print(
+                    f"Screenshot capture failed: {error}"
+                )
 
-    # Close the context to finalize the video recording.
-    context.browser_context.close()
+            # Save the Playwright trace for failed scenarios.
+            try:
+                context.browser_context.tracing.stop(
+                    path=str(context.trace_path)
+                )
+                trace_stopped = True
 
-    # Attach the finalized video to the Allure report.
+                print(
+                    f"Failure trace saved: {context.trace_path}"
+                )
+
+                # Attach the trace ZIP to Allure.
+                allure.attach.file(
+                    str(context.trace_path),
+                    name=f"{scenario.name} - Playwright Trace",
+                    attachment_type="application/zip",
+                    extension="zip"
+                )
+
+            except Exception as error:
+                print(
+                    f"Trace saving failed: {error}"
+                )
+
+        else:
+            # Stop tracing without saving a ZIP for passed scenarios.
+            context.browser_context.tracing.stop()
+            trace_stopped = True
+
+    finally:
+        # Make sure tracing is stopped if an earlier operation failed.
+        if not trace_stopped:
+            try:
+                context.browser_context.tracing.stop()
+            except Exception:
+                pass
+
+        # Close the browser context to finalize the video.
+        try:
+            context.browser_context.close()
+        except Exception as error:
+            print(f"Browser context cleanup failed: {error}")
+
+    # Attach the finalized video after closing the context.
     if video is not None:
-        video_path = video.path()
+        try:
+            video_path = video.path()
 
-        allure.attach.file(
-            str(video_path),
-            name=f"{scenario.name} - Video",
-            attachment_type="video/webm",
-            extension="webm"
-        )
+            allure.attach.file(
+                str(video_path),
+                name=f"{scenario.name} - Video",
+                attachment_type="video/webm",
+                extension="webm"
+            )
 
-        print(f"Video saved: {video_path}")
+            print(f"Video saved: {video_path}")
+
+        except Exception as error:
+            print(f"Video attachment failed: {error}")
 
     print(f"Scenario status: {scenario.status}")
 
@@ -135,9 +184,10 @@ def after_scenario(context, scenario):
 def after_all(context):
 
     # Close the browser after all scenarios finish.
-    context.browser.close()
-
-    # Stop Playwright.
-    context.playwright.stop()
+    try:
+        context.browser.close()
+    finally:
+        # Stop Playwright even if browser cleanup encounters an error.
+        context.playwright.stop()
 
     print("\nPlaywright browser closed successfully!")

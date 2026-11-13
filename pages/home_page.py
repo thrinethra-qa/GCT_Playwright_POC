@@ -1,4 +1,6 @@
 
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
 from pages.base_page import BasePage
 
 
@@ -23,27 +25,47 @@ class HomePage(BasePage):
 
     def open_special_offers(self):
 
-        # Close the promotional popup if it appears.
-        # This prevents it from interfering with navigation.
+        # First, handle a promotional popup if it is already visible.
         self.close_promo_popup()
 
-        # Locate the Special Offers link directly.
-        # We avoid restricting the search to a navigation
-        # region named "Main".
+        # Locate the Special Offers navigation link.
         special_offer = self.page.get_by_role(
             "link",
             name="Special Offers",
             exact=True
         ).first
 
-        # Wait until the navigation link becomes visible.
+        # Wait for the navigation link.
         special_offer.wait_for(
             state="visible",
             timeout=15000
         )
 
-        # Click the Special Offers navigation link.
-        special_offer.click()
+        # Try the normal click first.
+        try:
+            special_offer.click(timeout=5000)
+
+        except PlaywrightTimeoutError:
+
+            # If the click is blocked, check for a delayed popup.
+            print(
+                "Navigation click was blocked. "
+                "Checking for a promotional popup..."
+            )
+
+            popup_closed = self.close_promo_popup(
+                wait_timeout=3000
+            )
+
+            if not popup_closed:
+                # If no popup was found, allow Playwright to retry.
+                print(
+                    "No promotional popup found. "
+                    "Retrying the navigation click."
+                )
+
+            # Retry the navigation after popup handling.
+            special_offer.click(timeout=10000)
 
         # Wait until the Special Offers page opens.
         self.page.wait_for_url(

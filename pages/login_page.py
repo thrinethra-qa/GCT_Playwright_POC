@@ -1,4 +1,6 @@
 
+import re
+
 from pages.base_page import BasePage
 from playwright.sync_api import expect
 
@@ -20,12 +22,14 @@ class LoginPage(BasePage):
 
         # Locator for the login Submit button.
         self.submit_button = self.page.get_by_role(
-            "button", name="Submit", exact=True
+            "button",
+            name="Submit",
+            exact=True
         )
 
-        # Expected error message for invalid login credentials.
+        # Locate the invalid-login error banner.
         self.login_error = self.page.get_by_text(
-            "Your username or password is incorrect.",
+            "Having Trouble Logging In?",
             exact=False
         )
 
@@ -33,7 +37,7 @@ class LoginPage(BasePage):
         # Navigate to the GCT login page.
         self.navigate("https://www.gct.com/account/signin")
 
-        # Wait until the initial page content loads.
+        # Wait for the initial page content.
         self.page.wait_for_load_state("domcontentloaded")
 
         # Close the promotional popup if it appears.
@@ -53,7 +57,7 @@ class LoginPage(BasePage):
         # Check whether the popup exists and is visible.
         if close_button.count() > 0 and close_button.first.is_visible():
 
-            # Click the close button.
+            # Close the promotional popup.
             close_button.first.click()
 
             print("Promotional popup closed successfully!")
@@ -65,10 +69,10 @@ class LoginPage(BasePage):
         # Locate the username field.
         username_field = self.page.locator(self.username_field)
 
-        # Click the field to activate it.
+        # Activate the field.
         username_field.click()
 
-        # Wait until the field becomes editable.
+        # Wait until the field is editable.
         expect(username_field).to_be_editable(timeout=10000)
 
         # Enter the username.
@@ -80,10 +84,10 @@ class LoginPage(BasePage):
         # Locate the password field.
         password_field = self.page.locator(self.password_field)
 
-        # Click the field to activate it.
+        # Activate the field.
         password_field.click()
 
-        # Wait until the field becomes editable.
+        # Wait until the field is editable.
         expect(password_field).to_be_editable(timeout=10000)
 
         # Enter the password.
@@ -95,12 +99,32 @@ class LoginPage(BasePage):
         # Click the login Submit button.
         self.submit_button.click()
 
-    def is_login_error_displayed(self):
-        # Wait for the invalid-login error message.
-        self.login_error.wait_for(
-            state="visible",
-            timeout=10000
-        )
+        print("Login Submit button clicked!")
 
-        # Return True if the error message is visible.
-        return self.login_error.is_visible()
+    def is_login_error_displayed(self):
+        # Wait for the error banner to appear.
+        expect(self.login_error).to_be_visible(timeout=15000)
+
+        # Read the complete visible page text.
+        actual_text = self.page.locator("body").inner_text()
+
+        # Normalize line breaks, tabs, and repeated spaces.
+        normalized_text = re.sub(
+            r"\s+",
+            " ",
+            actual_text
+        ).strip().lower()
+
+        # Check for the important invalid-login message.
+        expected_text = "your username or password is incorrect"
+
+        # Print the actual page text if verification fails.
+        if expected_text not in normalized_text:
+            print("Login error banner was found, but expected text was not matched.")
+            print("Actual page text:")
+            print(actual_text)
+            return False
+
+        print("Invalid login error message displayed successfully!")
+
+        return True
